@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+<h1>metro gnome</h1>
+<title>metro gnome</title>
+<link href='http://fonts.googleapis.com/css?family=Della+Respira' rel='stylesheet' type='text/css'>
+<link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body>
+<div id="floater"></div>
+<div id="content">
+	<div id="options">
+		I want songs between <input type="number" id="bpm" value="132"> and <input type="number" id="bpm2" value="144"> BPM    <input type="button" id="tap" value="Tap to set tempo">
+		<br><br>
+		<input type="radio" name="playlistType" id="r_artist" value="artist" checked>by <input type="text" id="artist-name" value="D'Angelo"> (<input type="checkbox" id="similar" checked>as well as by similar artists) <br><input type="radio" name="playlistType" id="r_genre" value="genre">in the 
+		<select id="genres">
+			<option value="metal">metal</option>
+			<option value="malaysian pop" selected>malaysian pop</option>
+		</select> genre
+		<br><br> and 
+		<input type="button" id="submit" value="I want them now">
+	</div>
+	<br><br>
+	<div id="playlist"></div>
+	<br>
+	<a href="http://usdivad.com/">David Su</a> 2013
+</div>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript">
+
+//silly pie
+var artisans = ["D'Angelo", "Miles Davis", "Brian Blade", "Pixies", "Sonic Youth", "Elliott Smith", "Aphex Twin", "Blur", "Dirty Projectors", "Meshuggah", "Burial", "Colin Stetson", "Bjork", "J Dilla", "Ambrose Akinmusire", "Vijay Iyer", "Charles Mingus", "John Coltrane", "Sonny Rollins", "The Who", "Lady Gaga", "Beyonce", "Kanye West", "Flying Lotus", "Squarepusher", "Jimi Hendrix", "Radiohead", "Kurt Vile", "Neil Young", "Ty Segall", "The Smiths", "Tori Amos", "Xiu Xiu", "Carsick Cars", "Kendrick Lamar", "Cornelius", "Hans Zimmer", "Howard Shore", "Ludwig Van Beethoven", "Bela Bartok", "Igor Stravinsky"];
+$("#artist-name").val(artisans[Math.floor(Math.random()*artisans.length)]);
+
+
+//generating genre drop-down
+$.getJSON("genres.json", null, function(data) {
+	var g = data["response"]["genres"];
+	var s = "";
+	for (var i=0; i<g.length; i++) {
+		s += "<option value = '" + g[i]["name"] + "'>" + g[i]["name"] + "</option>";
+		//document.write(g[i]["name"]);
+		//document.write("asf");
+	}	
+	$("#genres").html(s);
+});
+
+//setting up query string
+var baseURL = "http://developer.echonest.com/api/v4/playlist/static?api_key=D9HIIVV8YJO48TCJ0&format=json&variety=1&bucket=id:spotify-WW&bucket=tracks";
+var bpm; //min
+var bpm2; //max
+var playlistType;
+var type;
+var seed;
+var query = "";
+var tracks = [];
+
+
+//button onclicks
+$("#tap").click(function() {
+	TapForBPM();
+});
+$("#submit").click(function() {
+	want();
+});
+$("#artist-name").click(function() {
+	$("#r_artist").prop("checked", true);
+});
+$("#similar").change(function() {
+	$("#r_artist").prop("checked", true);
+});
+$("#genres").change(function() {
+	$("#r_genre").prop("checked", true);
+});
+
+//what to do once submitted
+function want() {
+
+	//update query string
+	bpm = $("#bpm").val();
+	console.log(bpm);
+	//bpm2 = parseInt(bpm)+1;
+	bpm2 = $("#bpm2").val();
+	playlistType = $("[name='playlistType']:checked").val();
+
+	if (playlistType == "artist") {
+		seed = spaceToPlus($("#artist-name").val());
+		if ($("#similar").prop("checked")) {
+			type = "artist-radio&artist="+seed;
+		}
+		else {
+			type = "artist&artist="+seed;
+		}
+	}
+	else {
+		seed = spaceToPlus($("#genres").val());
+		type = "genre-radio&genre="+seed;
+	}
+
+	//update query
+	if (bpm2 > bpm) { //check which bpm is larger
+		query = baseURL +  "&min_tempo=" + bpm + "&max_tempo=" + bpm2 + "&type=" + type;
+	}
+	else if (bpm2 < bpm) {
+		query = baseURL +  "&min_tempo=" + bpm2 + "&max_tempo=" + bpm + "&type=" + type;
+	}
+	else { //if the two are equal
+		bpm2 = parseInt(bpm)+1;
+		query = baseURL +  "&min_tempo=" + bpm + "&max_tempo=" + bpm2 + "&type=" + type;
+	}
+	console.log(query);
+
+	//error checkin'
+	if (!parseFloat(bpm)) {
+		$("#playlist").html("Invalid BPM; try again");
+	}
+	else {
+
+		//appearance
+		$("#playlist").html("Loading...");
+
+		//let's JSON
+		//"null" is where you'd put all your params...
+		$.getJSON(query, null, function(data) {
+			var songs = data["response"]["songs"];
+			if (songs) {
+				for (var i=0; i<songs.length; i++) {
+					var t = songs[i]["tracks"][0];
+					if (t) {
+						tracks.push(t["foreign_id"].replace("spotify-WW:track:", ""));
+					}
+				}
+			}
+			/*else {
+				$("#playlist").html("Sorry, no matching tracks; please try again!");
+				return;
+			}*/
+		}).done(function() {
+
+			//generate spotify playlist
+			var out = "";
+			var spotifyURI = "spotify:trackset:PlaylistName:";
+
+			if (tracks.length == 0) {
+				$("#playlist").html("Sorry, no matching tracks; please try again.");
+				return;
+			}
+
+			for (var i=0; i<tracks.length;i++) {
+				spotifyURI += tracks[i] + ",";
+				console.log(tracks[i]);
+			}
+
+
+			out = '<iframe src="https://embed.spotify.com/?uri=' + spotifyURI + '" width="300" height="380" frameborder="0" allowtransparency="true"></iframe>';
+
+			$("#playlist").html(out);
+			tracks = []; //reset tracks
+		});
+	} //end else
+} //end want()
+
+
+
+function spaceToPlus(str) {
+	return str.replace(/ /g, "+");
+}
+
+
+
+/********/
+
+/*
+ *BPM tapper adapted from Rich Reel http://www.all8.com/tools/bpm.htm
+ */
+var count = 0;
+var msecsFirst = 0;
+var msecsPrevious = 0;
+
+function ResetCount()
+  {
+  count = 0;
+  document.getElementById("bpm").value = "";
+  //document.TAP_DISPLAY.T_TAP.value = "";
+  //document.TAP_DISPLAY.T_RESET.blur();
+  }
+
+function TapForBPM(e)
+  {
+  //document.TAP_DISPLAY.T_WAIT.blur();
+  var timeSeconds = new Date;
+  msecs = timeSeconds.getTime();
+  if ((msecs - msecsPrevious) > 2000) //T_WAIT.value 2 seconds
+    {
+    count = 0;
+    }
+
+  if (count == 0)
+    {
+    //document.getElementById("bpmIn").value = "0";
+    //document.TAP_DISPLAY.T_TAP.value = "First Beat";
+    msecsFirst = msecs;
+    count = 1;
+    }
+  else
+    {
+    var bpmAvg = 60000 * count / (msecs - msecsFirst);
+    //document.getElementById("bpmIn").value = Math.round(bpmAvg * 100) / 100;
+    document.getElementById("bpm").value = Math.round(bpmAvg);
+    document.getElementById("bpm2").value = Math.round(bpmAvg);
+    count++;
+    //document.TAP_DISPLAY.T_TAP.value = count;
+    }
+  msecsPrevious = msecs;
+  return true;
+  }
+//document.onkeypress = TapForBPM;
+
+</script>
+<!-- google analytics -->
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-42212505-1', 'usdivad.com');
+  ga('send', 'pageview');
+
+</script>
+</body>
+</html>
